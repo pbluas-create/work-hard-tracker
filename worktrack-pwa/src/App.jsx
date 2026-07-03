@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Home, PlusCircle, TrendingUp, UserCircle2, Flame, Check, X,
   Dumbbell, Bike, Salad, ChevronRight, Save, Loader2, Trash2, Target, Utensils, Plus,
-  Ruler, TestTube2, AlertTriangle
+  Ruler, TestTube2, AlertTriangle, ListChecks, Layers, Clock, Moon
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
@@ -39,6 +39,135 @@ const QUICK_FOODS = [
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+/* ---------------- workout plan: exercise library + program builder ---------------- */
+
+const SLOT_LIBRARY = {
+  sentadilla: [
+    { equip: "Mancuernas", name: "Sentadilla goblet con mancuerna", sets: "4×12" },
+    { equip: "Kettlebells", name: "Sentadilla goblet con kettlebell", sets: "4×12" },
+    { equip: null, name: "Sentadilla con peso corporal", sets: "4×18" },
+  ],
+  zancada: [
+    { equip: "Mancuernas", name: "Zancadas con mancuernas", sets: "3×12 c/pierna" },
+    { equip: null, name: "Zancadas con peso corporal", sets: "3×15 c/pierna" },
+  ],
+  bisagra_cadera: [
+    { equip: "Mancuernas", name: "Peso muerto rumano con mancuernas", sets: "4×12" },
+    { equip: "Kettlebells", name: "Peso muerto rumano con kettlebell", sets: "4×12" },
+    { equip: null, name: "Puente de glúteo a una pierna", sets: "4×15 c/lado" },
+  ],
+  gluteo: [
+    { equip: "Banco", name: "Hip thrust en banco", sets: "4×15" },
+    { equip: null, name: "Puente de glúteo", sets: "4×20" },
+  ],
+  pantorrilla: [
+    { equip: null, name: "Elevación de talones de pie", sets: "4×20" },
+  ],
+  empuje_horizontal: [
+    { equip: "Banco", name: "Press banca con mancuernas", sets: "4×10" },
+    { equip: "Mancuernas", name: "Press de mancuernas en el suelo", sets: "4×10" },
+    { equip: null, name: "Flexiones de pecho (push-ups)", sets: "4×AMRAP" },
+  ],
+  empuje_vertical: [
+    { equip: "Mancuernas", name: "Press militar con mancuernas", sets: "3×10" },
+    { equip: "Bandas elásticas", name: "Press de hombro con banda", sets: "3×15" },
+    { equip: null, name: "Flexiones pike (pike push-ups)", sets: "3×AMRAP" },
+  ],
+  traccion_horizontal: [
+    { equip: "Mancuernas", name: "Remo con mancuerna a una mano", sets: "4×10 c/lado" },
+    { equip: "Bandas elásticas", name: "Remo con banda elástica", sets: "4×15" },
+    { equip: null, name: "Remo invertido (mesa o toalla en puerta)", sets: "4×AMRAP" },
+  ],
+  traccion_vertical: [
+    { equip: "Barra de dominadas", name: "Dominadas (o negativas asistidas)", sets: "4×AMRAP" },
+    { equip: "Bandas elásticas", name: "Jalón con banda elástica", sets: "4×15" },
+    { equip: null, name: "Remo invertido inclinado", sets: "4×12" },
+  ],
+  biceps: [
+    { equip: "Mancuernas", name: "Curl de bíceps con mancuernas", sets: "3×12" },
+    { equip: "Bandas elásticas", name: "Curl de bíceps con banda", sets: "3×15" },
+  ],
+  triceps: [
+    { equip: "Banco", name: "Fondos en banco (dips)", sets: "3×12" },
+    { equip: "Bandas elásticas", name: "Extensión de tríceps con banda", sets: "3×15" },
+    { equip: null, name: "Flexiones de agarre cerrado", sets: "3×AMRAP" },
+  ],
+  core: [
+    { equip: null, name: "Plancha + elevación de piernas", sets: "3×40s / 3×15" },
+  ],
+  cardio: [
+    { equip: null, name: "Bicicleta (rodillo o ruta), ritmo moderado", sets: "40–60 min" },
+  ],
+};
+
+function pickVariant(slotKey, equipo) {
+  const variants = SLOT_LIBRARY[slotKey] || [];
+  const conEquipo = variants.find(v => v.equip && equipo.includes(v.equip));
+  return conEquipo || variants.find(v => !v.equip) || variants[0];
+}
+
+const FULL_BODY_TEMPLATE = [
+  { titulo: "Full Body A", slots: ["sentadilla", "empuje_horizontal", "traccion_horizontal", "bisagra_cadera", "core"] },
+  { titulo: "Full Body B", slots: ["zancada", "empuje_vertical", "traccion_vertical", "gluteo", "core"] },
+  { titulo: "Full Body C", slots: ["sentadilla", "traccion_horizontal", "empuje_horizontal", "bisagra_cadera", "core"] },
+];
+const UPPER_LOWER_TEMPLATE = [
+  { titulo: "Tren Superior A", slots: ["empuje_horizontal", "traccion_horizontal", "empuje_vertical", "biceps", "triceps"] },
+  { titulo: "Tren Inferior A", slots: ["sentadilla", "bisagra_cadera", "zancada", "gluteo", "pantorrilla"] },
+  { titulo: "Tren Superior B", slots: ["traccion_vertical", "empuje_horizontal", "traccion_horizontal", "biceps", "triceps"] },
+  { titulo: "Tren Inferior B", slots: ["zancada", "gluteo", "sentadilla", "bisagra_cadera", "core"] },
+];
+const PPL_TEMPLATE = [
+  { titulo: "Push (empuje)", slots: ["empuje_horizontal", "empuje_vertical", "triceps", "core"] },
+  { titulo: "Pull (tracción)", slots: ["traccion_horizontal", "traccion_vertical", "biceps", "core"] },
+  { titulo: "Legs (piernas)", slots: ["sentadilla", "bisagra_cadera", "zancada", "gluteo", "pantorrilla"] },
+];
+
+function buildProgram(diasSemana) {
+  const dias = Number(diasSemana) || 4;
+  if (dias <= 3) return FULL_BODY_TEMPLATE.slice(0, Math.max(2, dias));
+  if (dias === 4) return UPPER_LOWER_TEMPLATE;
+  if (dias === 5) return [...PPL_TEMPLATE, UPPER_LOWER_TEMPLATE[0], { titulo: "Cardio / Bici", slots: ["cardio"] }];
+  return [...PPL_TEMPLATE, ...PPL_TEMPLATE];
+}
+
+const FASES = [
+  { nombre: "Fase 1 · Adaptación", periodo: "Semanas 1–4", foco: "Aprender la técnica de cada ejercicio y activar la musculatura. Intensidad moderada (RPE 6–7/10).", progresion: "Mantén el mismo peso/dificultad toda la fase. Prioriza la técnica sobre la carga." },
+  { nombre: "Fase 2 · Progresión", periodo: "Semanas 5–16", foco: "Aumentar volumen e intensidad de forma gradual.", progresion: "Cada 2 semanas: suma 1–2 repeticiones por serie, o un poco más de peso/dificultad cuando completes todas las reps con buena técnica." },
+  { nombre: "Fase 3 · Intensificación", periodo: "Semana 17 en adelante", foco: "Maximizar definición y fuerza con mayor densidad de entrenamiento.", progresion: "Reduce los descansos 15–30s, añade una serie extra en los ejercicios principales, y ajusta calorías según tus resultados reales." },
+];
+
+/* ---------------- nutrition plan: meal distribution + plate guide ---------------- */
+
+const MEAL_TEMPLATES = {
+  1: [{ n: "Comida única", p: 100 }],
+  2: [{ n: "Almuerzo", p: 55 }, { n: "Cena", p: 45 }],
+  3: [{ n: "Desayuno", p: 25 }, { n: "Almuerzo", p: 40 }, { n: "Cena", p: 35 }],
+  4: [{ n: "Desayuno", p: 25 }, { n: "Almuerzo", p: 35 }, { n: "Once", p: 15 }, { n: "Cena", p: 25 }],
+  5: [{ n: "Desayuno", p: 20 }, { n: "Colación", p: 10 }, { n: "Almuerzo", p: 30 }, { n: "Once", p: 15 }, { n: "Cena", p: 25 }],
+};
+
+function distributeMeals(comidasDia, kcalTotal) {
+  const tpl = MEAL_TEMPLATES[Number(comidasDia)] || MEAL_TEMPLATES[4];
+  return tpl.map(t => ({ ...t, kcal: kcalTotal ? Math.round((kcalTotal * t.p) / 100) : null }));
+}
+
+const PLATE_GUIDE = [
+  { grupo: "Proteínas", color: "#4CD97B", ejemplos: ["Pollo", "Pavo", "Pescado (jurel, atún, salmón)", "Huevos", "Carne magra", "Legumbres", "Yogur griego", "Queso fresco"] },
+  { grupo: "Carbohidratos", color: "#E4B93E", ejemplos: ["Arroz", "Papas", "Fideos integrales", "Avena", "Pan integral", "Quinoa", "Choclo", "Legumbres"] },
+  { grupo: "Grasas saludables", color: "#6EA8E0", ejemplos: ["Palta", "Aceite de oliva", "Frutos secos", "Semillas (chía, maravilla)", "Mantequilla de maní natural"] },
+  { grupo: "Vegetales", color: "#9BDB8E", ejemplos: ["Ensaladas variadas", "Brócoli", "Zapallo italiano", "Espinaca", "Tomate", "Zanahoria", "Pepino"] },
+];
+
+const PRINCIPIOS_ALIMENTACION = [
+  "Toma 2–3 litros de agua al día.",
+  "Incluye una fuente de proteína en cada comida principal.",
+  "Llena al menos la mitad del plato con vegetales en almuerzo y cena.",
+  "Deja los ultraprocesados y azúcar añadida para el consumo ocasional, no diario.",
+  "Planifica tus comidas con anticipación cuando puedas — reduce decisiones de último minuto.",
+  "Una comida libre ocasional no arruina el plan; la adherencia sostenida importa más que la perfección.",
+];
 
 function useStorage() {
   const [ready, setReady] = useState(false);
@@ -388,7 +517,13 @@ function Dashboard({ profile, entries, foodlog, goTo }) {
         </Card>
       )}
 
-      <button onClick={() => goTo("registro")} style={{ ...btnPrimary, width: "100%", marginBottom: 10 }}>
+      {profile && (
+        <button onClick={() => goTo("plan")} style={{ ...btnPrimary, width: "100%", marginBottom: 10 }}>
+          <ListChecks size={18} /> Ver mi plan
+        </button>
+      )}
+
+      <button onClick={() => goTo("registro")} style={{ ...btnGhost, width: "100%", marginBottom: 10 }}>
         <PlusCircle size={18} /> Registrar hoy
       </button>
       <button onClick={() => goTo("progreso")} style={{ ...btnGhost, width: "100%" }}>
@@ -1002,10 +1137,182 @@ function Perfil({ profile, entries, saveProfile }) {
   );
 }
 
+/* ---------------- Plan (Entrenamiento / Alimentación) ---------------- */
+
+const PLAN_SUBTABS = [
+  { id: "entrenamiento", label: "Entrenamiento" },
+  { id: "alimentacion", label: "Alimentación" },
+];
+
+function Plan({ profile, entries }) {
+  const [sub, setSub] = useState("entrenamiento");
+  return (
+    <div>
+      <div style={{ fontFamily: "'Archivo Black','Arial Black',sans-serif", fontSize: 22, color: "#F5F3EE", marginBottom: 4 }}>Tu plan</div>
+      <div style={{ color: "#9BA3AC", fontSize: 13, marginBottom: 16 }}>
+        Generado a partir de tu perfil. Aquí está el "qué hacer" — usa Registrar y Comida para el día a día.
+      </div>
+
+      <div style={{ display: "flex", background: "#1B1F26", border: "1px solid #2A2F37", borderRadius: 12, padding: 4, marginBottom: 20 }}>
+        {PLAN_SUBTABS.map(t => (
+          <button key={t.id} onClick={() => setSub(t.id)} style={{
+            flex: 1, padding: "9px 0", borderRadius: 9, border: "none", cursor: "pointer",
+            background: sub === t.id ? "#2E7D46" : "transparent",
+            color: sub === t.id ? "#F5F3EE" : "#9BA3AC", fontWeight: 700, fontSize: 12.5,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {!profile ? (
+        <Card style={{ borderColor: "#E4572E" }}>
+          <div style={{ color: "#F5F3EE", fontWeight: 700, marginBottom: 6 }}>Completa tu perfil primero</div>
+          <div style={{ color: "#9BA3AC", fontSize: 13 }}>
+            Tu plan de entrenamiento y alimentación se arma con tus datos de días disponibles, equipamiento, objetivo y peso. Ve a la pestaña Perfil y complétalos.
+          </div>
+        </Card>
+      ) : sub === "entrenamiento" ? (
+        <EntrenamientoPlan profile={profile} />
+      ) : (
+        <AlimentacionPlan profile={profile} entries={entries} />
+      )}
+    </div>
+  );
+}
+
+function EntrenamientoPlan({ profile }) {
+  const equipo = profile.equipamiento || [];
+  const dias = Number(profile.diasSemana) || 4;
+  const program = buildProgram(dias);
+  const descanso = Math.max(0, 7 - dias);
+
+  return (
+    <div>
+      <Card style={{ marginBottom: 20, display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <Clock size={18} color="#4CD97B" style={{ flexShrink: 0, marginTop: 1 }} />
+        <div style={{ fontSize: 12.5, color: "#9BA3AC" }}>
+          Calienta 5–10 min antes de cada sesión (movilidad + cardio suave) y cierra con 5 min de elongación. Usa {equipo.length ? equipo.join(", ").toLowerCase() : "peso corporal"} según lo que marcaste en tu perfil.
+        </div>
+      </Card>
+
+      <SectionTitle>Fases del plan</SectionTitle>
+      {FASES.map(f => (
+        <Card key={f.nombre} style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <Layers size={15} color="#4CD97B" />
+            <span style={{ color: "#F5F3EE", fontWeight: 700, fontSize: 14 }}>{f.nombre}</span>
+          </div>
+          <div style={{ color: "#6B7280", fontSize: 11.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>{f.periodo}</div>
+          <div style={{ color: "#C9CED4", fontSize: 13, marginBottom: 6 }}>{f.foco}</div>
+          <div style={{ color: "#9BA3AC", fontSize: 12.5 }}><b style={{ color: "#4CD97B" }}>Progresión: </b>{f.progresion}</div>
+        </Card>
+      ))}
+
+      <SectionTitle>Tu split semanal ({dias} días de entrenamiento{descanso > 0 ? `, ${descanso} de descanso` : ""})</SectionTitle>
+      {program.map((day, i) => (
+        <Card key={i} style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Dumbbell size={16} color="#4CD97B" />
+            <span style={{ color: "#F5F3EE", fontWeight: 700, fontSize: 14 }}>Día {i + 1} · {day.titulo}</span>
+          </div>
+          {day.slots.map(slotKey => {
+            const ex = pickVariant(slotKey, equipo);
+            if (!ex) return null;
+            return (
+              <div key={slotKey} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #232830" }}>
+                <span style={{ color: "#C9CED4", fontSize: 13 }}>{ex.name}</span>
+                <span style={{ color: "#9BA3AC", fontSize: 12.5, fontWeight: 700 }}>{ex.sets}</span>
+              </div>
+            );
+          })}
+        </Card>
+      ))}
+      {profile.ejercicioActual && (
+        <Card style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <Bike size={18} color="#6EA8E0" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, color: "#9BA3AC" }}>
+            Mencionaste "{profile.ejercicioActual}" como actividad actual — mantenla como cardio complementario en tus días de descanso, sin que reemplace las sesiones de fuerza.
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function AlimentacionPlan({ profile, entries }) {
+  const sorted = [...entries].filter(e => e.peso).sort((a, b) => a.date.localeCompare(b.date));
+  const pesoActual = sorted.length ? sorted[sorted.length - 1].peso : (profile.pesoInicio ? Number(profile.pesoInicio) : null);
+  const targets = getTargets(profile, pesoActual);
+  const meals = distributeMeals(profile.comidasDia, targets?.calorias);
+
+  return (
+    <div>
+      {targets?.calorias ? (
+        <Card style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "#9BA3AC", marginBottom: 8 }}>Tu meta diaria</div>
+          <div style={{ fontFamily: "'Archivo Black','Arial Black',sans-serif", fontSize: 26, color: "#F5F3EE", marginBottom: 8 }}>{targets.calorias} kcal</div>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <span style={{ color: "#4CD97B", fontSize: 13, fontWeight: 700 }}>Proteína {targets.proteina}g</span>
+            <span style={{ color: "#E4B93E", fontSize: 13, fontWeight: 700 }}>Carbos {targets.carbohidratos}g</span>
+            <span style={{ color: "#6EA8E0", fontSize: 13, fontWeight: 700 }}>Grasa {targets.grasa}g</span>
+          </div>
+        </Card>
+      ) : (
+        <Card style={{ marginBottom: 20, borderColor: "#E4572E" }}>
+          <div style={{ color: "#9BA3AC", fontSize: 13 }}>Completa edad, sexo, altura y peso en tu Perfil para calcular tu meta calórica.</div>
+        </Card>
+      )}
+
+      <SectionTitle>Distribución de comidas</SectionTitle>
+      {meals.map(m => (
+        <Card key={m.n} style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#F5F3EE", fontWeight: 700, fontSize: 14 }}>{m.n}</span>
+          <span style={{ color: "#9BA3AC", fontSize: 13 }}>{m.p}%{m.kcal ? ` · ${m.kcal} kcal` : ""}</span>
+        </Card>
+      ))}
+
+      <SectionTitle>Arma tu plato</SectionTitle>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 12.5, color: "#9BA3AC" }}>
+          En cada comida principal combina: 1 porción de proteína + 1 porción de carbohidrato + una fuente de grasa saludable, y llena al menos la mitad del plato con vegetales.
+        </div>
+      </Card>
+      {PLATE_GUIDE.map(g => (
+        <Card key={g.grupo} style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 9, height: 9, borderRadius: 99, background: g.color }} />
+            <span style={{ color: "#F5F3EE", fontWeight: 700, fontSize: 13 }}>{g.grupo}</span>
+          </div>
+          <div style={{ color: "#9BA3AC", fontSize: 12.5 }}>{g.ejemplos.join(" · ")}</div>
+        </Card>
+      ))}
+
+      {profile.restricciones && (
+        <Card style={{ marginTop: 4, marginBottom: 20, display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <AlertTriangle size={16} color="#E4B93E" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, color: "#9BA3AC" }}>
+            Tienes registrado: <b style={{ color: "#F5F3EE" }}>{profile.restricciones}</b>. Ajusta las categorías de arriba evitando lo que corresponda.
+          </div>
+        </Card>
+      )}
+
+      <SectionTitle>Principios generales</SectionTitle>
+      <Card>
+        {PRINCIPIOS_ALIMENTACION.map((p, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, padding: "6px 0", borderBottom: i < PRINCIPIOS_ALIMENTACION.length - 1 ? "1px solid #232830" : "none" }}>
+            <Check size={14} color="#4CD97B" style={{ flexShrink: 0, marginTop: 2 }} />
+            <span style={{ color: "#C9CED4", fontSize: 12.5 }}>{p}</span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
 /* ---------------- App shell ---------------- */
 
 const TABS = [
   { id: "inicio", label: "Inicio", icon: Home },
+  { id: "plan", label: "Plan", icon: ListChecks },
   { id: "registro", label: "Registrar", icon: PlusCircle },
   { id: "comida", label: "Comida", icon: Utensils },
   { id: "progreso", label: "Progreso", icon: TrendingUp },
@@ -1056,6 +1363,7 @@ export default function App() {
               </div>
             )}
             {tab === "inicio" && <Dashboard profile={profile} entries={entries} foodlog={foodlog} goTo={setTab} />}
+            {tab === "plan" && <Plan profile={profile} entries={entries} />}
             {tab === "registro" && <Registro entries={entries} saveEntries={saveEntries} goTo={setTab} />}
             {tab === "comida" && <Comida profile={profile} entries={entries} foodlog={foodlog} saveFoodlog={saveFoodlog} />}
             {tab === "progreso" && (
